@@ -90,6 +90,8 @@ export async function processDifyPipeline(formData: FormData) {
         buffer = buffer.slice(boundary + 2); // Remove processed chunk from buffer
         boundary = buffer.indexOf("\n\n");
 
+        console.log("STREAM CHUNK ARRIVED:", chunk.substring(0, 150));
+
         if (chunk.startsWith("data: ")) {
           const dataStr = chunk.replace("data: ", "").trim();
           
