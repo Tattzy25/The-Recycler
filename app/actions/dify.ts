@@ -37,7 +37,7 @@ export async function processDifyPipeline(formData: FormData) {
     }
     const { id: fileId } = await uploadRes.json();
 
-    // 3. Trigger Dify Workflow in STREAMING Mode
+    // 3. Trigger Dify Workflow in blocking Mode
     const workflowRes = await fetch("https://api.dify.ai/v1/workflows/run", {
       method: "POST",
       headers: {
@@ -53,7 +53,7 @@ export async function processDifyPipeline(formData: FormData) {
           } 
         },
         workflow_run_id: DYNAMIC_RUN_ID,
-        response_mode: "streaming", // SWITCHED TO STREAMING
+        response_mode: "blocking", // SWITCHED TO blocking
         user: DYNAMIC_USER_ID,
       }),
     });
@@ -89,8 +89,6 @@ export async function processDifyPipeline(formData: FormData) {
         const chunk = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2); // Remove processed chunk from buffer
         boundary = buffer.indexOf("\n\n");
-
-        console.log("STREAM CHUNK ARRIVED:", chunk.substring(0, 150));
 
         if (chunk.startsWith("data: ")) {
           const dataStr = chunk.replace("data: ", "").trim();

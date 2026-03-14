@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
 import { processDifyPipeline } from "./actions/dify";
-import { Loader2, Upload, X, RefreshCw } from "lucide-react";
+import { Loader2, Upload, X, RefreshCw, Pause } from "lucide-react";
 
 type ImageStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -41,15 +41,28 @@ export default function BulkPage() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  // NEW: Triggers the stop signal
+  const pauseBatch = () => {
+    stopSignal.current = true;
+    setLogs((prev) => [`> SYSTEM: Pause requested. Halting after current image finishes...`, ...prev]);
+  };
+
   const runBatch = async () => {
     setIsProcessing(true);
-    stopSignal.current = false;
+    stopSignal.current = false; // Reset signal on start/resume
     let consecutiveFailures = 0;
     const currentItems = [...items];
 
     for (let i = 0; i < currentItems.length; i++) {
+      // NEW: Break the loop completely if user clicked Pause
+      if (stopSignal.current) {
+        setLogs((prev) => [`> SYSTEM: Pipeline paused successfully.`, ...prev]);
+        break;
+      }
+
       const current = currentItems[i];
-      if (!current || current.status === "completed" || stopSignal.current) continue;
+      // Skip completed items, allowing "Resume" to work flawlessly
+      if (!current || current.status === "completed") continue;
 
       current.status = "processing";
       setItems([...currentItems]);
@@ -117,6 +130,10 @@ export default function BulkPage() {
     }
   };
 
+  // Logic to determine what the start button should say
+  const hasPendingItems = items.some(i => i.status === "pending" || i.status === "failed");
+  const buttonText = items.length === 0 ? "Start Pipeline" : hasPendingItems && items.some(i => i.status === "completed") ? "Resume Pipeline" : "Start Pipeline";
+
   return (
     <div className="flex min-h-svh flex-col items-center p-6 bg-background text-foreground font-sans gap-8">
       
@@ -133,10 +150,16 @@ export default function BulkPage() {
           </label>
 
           <div className="flex gap-4">
-            <Button size="lg" onClick={runBatch} disabled={isProcessing || items.every(i => i.status === "completed")} className="flex-1 font-black uppercase italic">
-              {isProcessing ? <Loader2 className="animate-spin mr-2" /> : <RefreshCw className="mr-2 w-4 h-4" />}
-              {isProcessing ? "Executing Sequence..." : "Start Pipeline"}
-            </Button>
+            {/* NEW: Dynamic Pause / Resume Button Logic */}
+            {isProcessing ? (
+              <Button size="lg" variant="destructive" onClick={pauseBatch} className="flex-1 font-black uppercase italic shadow-sm">
+                <Pause className="mr-2 w-4 h-4" /> Pause Pipeline
+              </Button>
+            ) : (
+              <Button size="lg" onClick={runBatch} disabled={items.length === 0 || !hasPendingItems} className="flex-1 font-black uppercase italic shadow-sm">
+                <RefreshCw className="mr-2 w-4 h-4" /> {buttonText}
+              </Button>
+            )}
             <Button size="lg" variant="outline" onClick={() => { setItems([]); setLogs([]); }}>Clear All</Button>
           </div>
 
@@ -156,8 +179,8 @@ export default function BulkPage() {
           <ScrollArea className="h-[200px] w-full rounded-md border bg-muted/10 p-4 font-mono text-[10px]">
             <div className="space-y-1.5">
               {logs.map((log, i) => (
-                <div key={i} className={log.includes("DONE") ? "text-primary font-bold" : log.includes("FAILED") ? "text-destructive" : "text-muted-foreground"}>
-                  {`> ${log}`}
+                <div key={i} className={log.includes("DONE") ? "text-primary font-bold" : log.includes("FAILED") || log.includes("ERROR") || log.includes("CRITICAL") ? "text-destructive" : log.includes("PAUSE") ? "text-amber-500 font-bold" : "text-muted-foreground"}>
+                  {log}
                 </div>
               ))}
               {logs.length === 0 && <span className="opacity-50 italic tracking-widest text-muted-foreground">Awaiting batch ignite...</span>}
